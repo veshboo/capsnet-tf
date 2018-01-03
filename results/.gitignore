@@ -1,0 +1,5 @@
+# The training and test results will be saved in this directory.
+# Keep this directory empty in git.
+*
+# Except this file
+!.gitignore
