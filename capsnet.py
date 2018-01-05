@@ -16,7 +16,6 @@ epsilon = 1e-9
 
 def squash(v):
     """Return squashed v."""
-    # v: [..., 10, 1, 1]
     square_norm = tf.reduce_sum(tf.square(v), -2, keep_dims=True)
     return square_norm / (1 + square_norm) * v / tf.sqrt(square_norm + epsilon)
 
@@ -75,12 +74,8 @@ def conv_to_fc(u):
 
 
 def routing(uh, num_outputs):
-    """Route by dynamic agreement.
-
-    Determine coupling coefficients, which indicate contribution/stimuli
-    from conv2d features to digits.
-    """
-    # In forward (inner loop), uh_stopped = uh.
+    """Route by dynamic agreement."""
+    # In forward (inner iterations), uh_stopped = uh.
     # In backward, no gradient passed back from uh_stopped to uh.
     uh_stopped = tf.stop_gradient(uh, name='stop_gradient')
     b = tf.zeros([cfg.batch_size, uh.shape[1].value, num_outputs, 1, 1])  # b: [bs, 1152, 10, 1, 1]
@@ -100,9 +95,9 @@ def routing(uh, num_outputs):
                 # tile from [batch_size ,1, 10, 16, 1] to [batch_size, 1152, 10, 16, 1]
                 # for matmul, in the last two dim: [16, 1].T x [16, 1] => [1, 1]
                 v_tiled = tf.tile(v, [1, 1152, 1, 1, 1])
-                h_produce_v = tf.matmul(uh_stopped, v_tiled, transpose_a=True)
-                assert h_produce_v.get_shape() == [cfg.batch_size, 1152, 10, 1, 1]  # Agreement
-                b += h_produce_v
+                uh_produce_v = tf.matmul(uh_stopped, v_tiled, transpose_a=True)  # Agreement
+                assert uh_produce_v.get_shape() == [cfg.batch_size, 1152, 10, 1, 1]
+                b += uh_produce_v
     return(v)
 
 
