@@ -33,42 +33,106 @@ def conv_caps(input, num_outputs, kernel_size, stride, vec_len):
 def fc_caps(input, num_outputs, vec_len):
     """Return DigitCaps layer, fully connected layer."""
     with tf.variable_scope('routing'):
-        uh = conv_to_fc(input)
+        # NOTE: Choose one to use
+        # uh = conv_to_fc_0(input)  # Original, correct
+        # uh = conv_to_fc_1(input)  # Mis-interpretation version
+        uh = conv_to_fc_2(input)  # tf.scan for batch_size, correct
         caps = routing(uh, num_outputs)
         caps = tf.squeeze(caps, axis=1)
         return caps
 
 
-# Graph computing *u_hat_IJ* of Equation. 2 in the paper.
-def conv_to_fc(u):
+#
+# Comparison of graphs computing *u_hat_IJ* of Equation. 2 in the paper.
+#
+
+
+# Original, correct implementation
+# from <http://github.com/naturomics/CapsNet-Tensorflow>.
+def conv_to_fc_0(u):
     """Return FC-wise contribution from conv capsules to digit capsules."""
-    # Reshape, tile and transpose the u for tf.scan W * u (send 36 outer)
-    #                                                  TTTTTT  TT                            TT  TTTTTT
-    # u: =(reshape)=> [bs, 32, 36, 1, 8, 1] =(tile)=> [bs, 32, 36, 10, 8, 1] =(transpose)=> [36, bs, 32, 10, 8, 1]
-    #                      RRRRRR  t                               tt
+    # Shape u for tf.matmul(W, u)
+    # reshape: [bs, 1152, 8, 1]    => [bs, 1152, 1, 8, 1]
+    #               ^^^^                   ^^^^^^^
+    # tile:    [bs, 1152, 1, 8, 1] => [bs, 1152, 10, 8, 1]
+    #                     ^                      ^^
+    u = tf.reshape(u, [cfg.batch_size, -1, 1, 8, 1])
+    u = tf.tile(u, [1, 1, 10, 1, 1])
+    assert u.get_shape() == [cfg.batch_size, 1152, 10, 8, 1]
+
+    # W: [bs, 1152, 10, 8, 16], tf.tile bach_size times
+    W = tf.get_variable('Weight', shape=[1, 1152, 10, 8, 16], dtype=tf.float32,
+                        initializer=tf.random_normal_initializer(stddev=cfg.stddev))
+    W = tf.tile(W, [cfg.batch_size, 1, 1, 1, 1])
+    assert W.get_shape() == [cfg.batch_size, 1152, 10, 8, 16]
+
+    # Eq.2, uh
+    # [bs, 1152, 10, 8, 16].T x [bs, 1152, 10, 8, 1] => [bs, 1152, 10, 16, 1]
+    uh = tf.matmul(W, u, transpose_a=True)
+    assert uh.get_shape() == [cfg.batch_size, 1152, 10, 16, 1]
+    return uh
+
+
+# with mis-interpretation regarding *sharing weights*.
+def conv_to_fc_1(u):
+    """Return FC-wise contribution from conv capsules to digit capsules."""
+    # Shape u for tf.matmul(W, u) in tf.scan, tranpose to send the 36 outer
+    # reshape:   [bs, 1152, 1, 8, 1]   => [bs, 32, 36, 1, 8, 1]
+    #                 ^^^^                     ^^  ^^
+    # transpose: [bs, 32, 36, 1, 8, 1] => [36, bs, 32, 1, 8, 1]
+    #             ^^^^^^^ ^^               ^^  ^^^^^^
+    # tile:      [36, bs, 32, 1, 8, 1] => [36, bs, 32, 10, 8, 1]
+    #                         ^                        ^^
     u = tf.reshape(u, [cfg.batch_size, 32, -1, 1, 8, 1])
-    u = tf.tile(u, [1, 1, 1, 10, 1, 1])
     u = tf.transpose(u, perm=[2, 0, 1, 3, 4, 5])
+    u = tf.tile(u, [1, 1, 1, 10, 1, 1])
     assert u.get_shape() == [36, cfg.batch_size, 32, 10, 8, 1]
 
-    # W: [bs, 32, 10, 8, 16], multiplying 36 times by tf.scan
+    # W: [bs, 32, 10, 8, 16], will be repeated 36 times by tf.scan
     W = tf.get_variable('Weight', shape=[1, 32, 10, 8, 16], dtype=tf.float32,
                         initializer=tf.random_normal_initializer(stddev=cfg.stddev))
-    # XXX Is this tile avoidable also (by tf.scan)?
     W = tf.tile(W, [cfg.batch_size, 1, 1, 1, 1])
+    assert W.get_shape() == [cfg.batch_size, 32, 10, 8, 16]
 
-    # Eq.2, u_hat
-    # [..., 8, 16].T x [..., 8, 1] => [..., 16, 1] => [36, batch_size, 32, 10, 16, 1]
+    # Eq.2, uh
+    # [bs, 32, 10, 8, 16].T x [36, bs, 32, 10, 8, 1] => [36, bs, 32, 10, 16, 1]
     uh = tf.scan(lambda ac, x: tf.matmul(W, x, transpose_a=True), u,
                  initializer=tf.zeros([cfg.batch_size, 32, 10, 16, 1]))
     assert uh.get_shape() == [36, cfg.batch_size, 32, 10, 16, 1]
 
     # Transpose and reshape uh back for sum_I {c (*) uh}
-    #  TT  TTTTTT                             TTTTTT  TT
-    # [36, bs, 32, 10, 16, 1] =(transpose)=> [bs, 32, 36, 10, 16, 1] =(reshape) => [bs, 1152, 10, 16, 1]
-    #                                             RRRRRR                                RRRR
+    # transpose: [36, bs, 32, 10, 16, 1] => [bs, 32, 36, 10, 16, 1]
+    #             ^^  ^^^^^^                 ^^^^^^  ^^
+    # reshape:   [bs, 32, 36, 10, 16, 1] => [bs, 1152, 10, 16, 1]
+    #                 ^^^^^^                     ^^^^
     uh = tf.transpose(uh, perm=[1, 2, 0, 3, 4, 5])
     uh = tf.reshape(uh, shape=[cfg.batch_size, -1, 10, 16, 1])
+    assert uh.get_shape() == [cfg.batch_size, 1152, 10, 16, 1]
+    return uh
+
+
+# Correct interpretation of *sharing weights*
+# and using `tf.scan` for batch_size.
+def conv_to_fc_2(u):
+    """Return FC-wise contribution from conv capsules to digit capsules."""
+    # Shape u for tf.matmul(W, u) in tf.scan
+    # reshape: [bs, 1152, 8, 1]    => [bs, 1152, 1, 8, 1]
+    #               ^^^^                   ^^^^^^^
+    # tile:    [bs, 1152, 1, 8, 1] => [bs, 1152, 10, 8, 1]
+    #                     ^                      ^^
+    u = tf.reshape(u, [cfg.batch_size, -1, 1, 8, 1])
+    u = tf.tile(u, [1, 1, 10, 1, 1])
+    assert u.get_shape() == [cfg.batch_size, 1152, 10, 8, 1]
+
+    # W: [1152, 10, 8, 16], will be repeated batch_size times by tf.scan
+    W = tf.get_variable('Weight', shape=[1152, 10, 8, 16], dtype=tf.float32,
+                        initializer=tf.random_normal_initializer(stddev=cfg.stddev))
+    assert W.get_shape() == [1152, 10, 8, 16]
+
+    # Eq.2, u_h
+    # [1152, 10, 8, 16].T x [bs, 1152, 10, 8, 1] => [bs, 1152, 10, 16, 1]
+    uh = tf.scan(lambda ac, x: tf.matmul(W, x, transpose_a=True), u,
+                 initializer=tf.zeros([1152, 10, 16, 1]))
     assert uh.get_shape() == [cfg.batch_size, 1152, 10, 16, 1]
     return uh
 
