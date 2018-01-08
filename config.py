@@ -43,4 +43,4 @@ flags.DEFINE_integer('batch_size_per_gpu', 128, 'batch size on 1 gpu')
 flags.DEFINE_integer('thread_per_gpu', 4, 'Number of preprocessing threads per tower.')
 
 cfg = tf.app.flags.FLAGS
-tf.logging.set_verbosity(tf.logging.INFO)
+# tf.logging.set_verbosity(tf.logging.INFO)
