@@ -1,5 +1,11 @@
 %Capsule Network MNIST 구현과 실험
 
+<!--
+`readme2tex`를 사용해서 github README.md에 LaTeX 수식을 포함하는 방식을 사용하고 있다.
+그러려면 README.md를 직접 수정하지 말고 READOTHER.md를 수정한 후에 다음 명령어로 README.md를 갱신해주어야 한다.
+python -m readme2tex --output README.md READOTHER.md
+-->
+
 ## 요약
 
 [Dynamic Routing between Capsules](CapsNet.pdf)(논문)에 나오는 MNIST Capsule Network의 TensorFlow 구현입니다.
