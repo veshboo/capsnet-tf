@@ -1,6 +1,4 @@
 %Capsule Network MNIST 구현과 실험
-\renewcommand{\vec}[1]{\mathbf{#1}}
-\newcommand{\mat}[1]{\mathbf{#1}}
 
 ## 요약
 
@@ -58,14 +56,14 @@ cat results/test_acc.csv
 
 ## 궁금했던 점
 
-논문의 Equation 2의 뒷 부분의 식 ($\hat{\vec{u}}_{j|i} = \vec{W}_{ij} \vec{u}_i$)을 이용해서 primary capusule에서 digit capsule로의 "예측 벡터들 (prediction vectors)"을 계산할 때 "primary capsule 레이어에는 32개의 채널이 있고, 같은 채널에 속한 primary capsule 36개 ($6 \times 6$)는 가중치 (weights)를 공유한다"고 되어 있는데 (원문)
+논문의 Equation 2의 뒷 부분의 식 ($\hat{\mathbf{u}}_{j|i} = \mathbf{W}_{ij} \mathbf{u}_i$)을 이용해서 primary capusule에서 digit capsule로의 "예측 벡터들 (prediction vectors)"을 계산할 때 "primary capsule 레이어에는 32개의 채널이 있고, 같은 채널에 속한 primary capsule 36개 ($6 \times 6$)는 가중치 (weights)를 공유한다"고 되어 있는데 (원문)
 
 > In total PrimaryCapsules has [$32 \times 6 \times 6$] capsule outputs (each output is an 8D vector)
 > and **each capsule in the [6 \times 6] grid is sharing their weights with each other**.
 
-참고한 naturomics의 구현에서는 $\mat{W}_{ij}$를 공유하지 않고 `tf.tile`로 36번 복사하는 방식으로 구현하고 있어서, 그 대신에 `tf.scan`을 이용해 $\mat{W}_{ij}$를 공유하여 반복 계산하는 방식으로 구현하고 비교했습니다.
+참고한 naturomics의 구현에서는 $\mathbf{W}_{ij}$를 공유하지 않고 `tf.tile`로 36번 복사하는 방식으로 구현하고 있어서, 그 대신에 `tf.scan`을 이용해 $\mathbf{W}_{ij}$를 공유하여 반복 계산하는 방식으로 구현하고 비교했습니다.
 
-마찬가지로 batch_size에 대해서도 $\mat{W}$를 `tf.tile`로 복사하는 방식으로 구현되어 있습니다.
+마찬가지로 batch_size에 대해서도 $\mathbf{W}$를 `tf.tile`로 복사하는 방식으로 구현되어 있습니다.
 이 부분도 `tf.scan`을 사용해 구현하고 예측 정확도, 훈련 시간에 어떤 영향이 있는지 확인했습니다.
 GPU 메모리 사용량에 대해서도 궁금하지만 관련 지식이 부족해서 확인하지 않았습니다.
 
@@ -88,7 +86,7 @@ cat results/test_acc.csv                                 # 결과 출력
 | 구현 | test accuracy (%) | 훈련 소요 시간 |
 |:----------------------------|:-----------:|:-----------:|
 | 원래 구현 (naturomics) | <!--[0.9934, 0.9935, 0.9945]--> 0.62 $\pm$ 0.050 | 3h 41m 58s |
-| 동일 채널의 36개 primary capsule들이<br/>하나의 $\mat{W}_{ij}$를 공유하는 구현 | <!--[0.9915, 0.9884, 0.9909]--> 0.97 $\pm$ 0.134 | 3h 33m 49s |
+| 동일 채널의 36개 primary capsule들이<br/>하나의 $\mathbf{W}_{ij}$를 공유하는 구현 | <!--[0.9915, 0.9884, 0.9909]--> 0.97 $\pm$ 0.134 | 3h 33m 49s |
 | batch_size에 대해서(만) `tf.scan`을 사용한 구현 | <!--[0.9931, 0.9940, 0.9938]--> 0.64 $\pm$ 0.039 | 3h 40m 44s |
 
 결과를 해석하면 `tf.tile`을 사용한 원래 구현이 그 만큼 많은 파라미터를 사용하므로 더 예측을 잘하는 것으로 보입니다.
@@ -116,12 +114,12 @@ primary 캡슐 $i$의 출력에서 digit 캡슐 $j$로의 예측 벡터를 계�
 
 | tensor                |  shape  | 비고 |
 |:---------------------:|:--------|:----|
-| $\vec{u}_i$           | (8, 1)  | primary capsule 벡터 |
-| $\vec{v}_j$           | (16, 1) | digit capsule 벡터 |
-| $\vec{s}_{j}$         | (16, 1) | squash 함수는 tensor의 shape을 바꾸지 않음 |
-| $\hat{\vec{u}}_{j|i}$ | (16, 1) | 커플링 계수 $c_{ij}$ 이용한 weighted sum도 마찬가지 |
+| $\mathbf{u}_i$           | (8, 1)  | primary capsule 벡터 |
+| $\mathbf{v}_j$           | (16, 1) | digit capsule 벡터 |
+| $\mathbf{s}_{j}$         | (16, 1) | squash 함수는 tensor의 shape을 바꾸지 않음 |
+| $\hat{\mathbf{u}}_{j|i}$ | (16, 1) | 커플링 계수 $c_{ij}$ 이용한 weighted sum도 마찬가지 |
 | $c_{ij}$              | ()      | scalar |
-| $\mat{W}_{ij}$        | (8, 16) | (8, 1)을 (16, 1)로 변환하기 위한 가중치 행렬 |
+| $\mathbf{W}_{ij}$        | (8, 16) | (8, 1)을 (16, 1)로 변환하기 위한 가중치 행렬 |
 
 ## CapsNet for MNIST
 
@@ -131,16 +129,16 @@ MNIST Capsule Network에는 primary capsule이 1152 = 32 x 6 x 6개 digit capsul
 
 ## naturomics의 구현
 
-$\mat{W}$와 $\vec{u}$의 `tf.matmul`을 위해 shape을 맞추고 batch_size (bs)까지 고려하면, 결과적으로 사용되는 tensor들의 shape은 다음과 같다.
+$\mathbf{W}$와 $\mathbf{u}$의 `tf.matmul`을 위해 shape을 맞추고 batch_size (bs)까지 고려하면, 결과적으로 사용되는 tensor들의 shape은 다음과 같다.
 
 |tensor|shape|비고|
 |:-:|:-------:|:--------------|
-| $\vec{u}$ | (bs, 1152, 10, 8, 1) | primaryCaps 레이어의 캡슐 1152개, $\mat{W}$와의 `tf.matmul`위한 `tf.reshape`과 `tf.tile` 처리 |
-| $\vec{v}$ | (bs, 1, 10, 16, 1)          | digitCaps 레이어의 캡슐 10개 |
-| $\vec{s}$ | (bs, 1, 10, 16, 1)          | squash 함수는 shape을 바꾸지 않음 |
-| $\hat{\vec{u}}$ | (bs, 1152, 10, 16, 1) | 밑 2차원은 벡터, nested-for-bs-i-j |
+| $\mathbf{u}$ | (bs, 1152, 10, 8, 1) | primaryCaps 레이어의 캡슐 1152개, $\mathbf{W}$와의 `tf.matmul`위한 `tf.reshape`과 `tf.tile` 처리 |
+| $\mathbf{v}$ | (bs, 1, 10, 16, 1)          | digitCaps 레이어의 캡슐 10개 |
+| $\mathbf{s}$ | (bs, 1, 10, 16, 1)          | squash 함수는 shape을 바꾸지 않음 |
+| $\hat{\mathbf{u}}$ | (bs, 1152, 10, 16, 1) | 밑 2차원은 벡터, nested-for-bs-i-j |
 | $c$       | (bs, 1152, 10, 1, 1)        | 밑 2차원은 scalar, nested-for-bs-i-j |
-| $\mat{W}$ | (bs, 1152, 10, 8, 16)       | 밑 2차원은 행렬, nested-for-bs-i-j |
+| $\mathbf{W}$ | (bs, 1152, 10, 8, 16)       | 밑 2차원은 행렬, nested-for-bs-i-j |
 
 nested-for-bs-i-j
 : `for bs: for i: for j:`에 해당하는 vectorization (적합한 표현인가?)
@@ -148,9 +146,9 @@ nested-for-bs-i-j
 scalar
 : scalar를 (1, 1)로 shape하는 이유는 element-wise 계산에 사용되기 때문
 
-## 동일 채널의 36개 primary capsule들이 하나의 $\mat{W}_{ij}$를 공유하는 구현
+## 동일 채널의 36개 primary capsule들이 하나의 $\mathbf{W}_{ij}$를 공유하는 구현
 
-naturomics의 원래 구현에서 고쳐 볼 부분은 $\mat{W}$의 두번째 차원 1152=32x(6x6)에서 6x6회를 `tf.scan`을 사용해 반복 처리하는 것이다.
+naturomics의 원래 구현에서 고쳐 볼 부분은 $\mathbf{W}$의 두번째 차원 1152=32x(6x6)에서 6x6회를 `tf.scan`을 사용해 반복 처리하는 것이다.
 이를 위해 먼저 (bs, 32, 36, 10, 8, 1) 형태로 `tf.reshape`하고 `tf.transpose`를 이용해 36을 맨 위 차원으로 빼낸다.
 그리고는 `tf.scan`에 `lambda`로 전달하는 `tf.matmul`을 위해 `tf.tile` 10으로 상위 차원의 shape을 맞춘다.
 
@@ -167,7 +165,7 @@ u = tf.transpose(u, perm=[2, 0, 1, 3, 4, 5])
 u = tf.tile(u, [1, 1, 1, 10, 1, 1])
 ```
 
-`tf.scan`을 이용해서 $\mat{W}$와 $\vec{u}$를 `tf.matmul`하는 코드는 다음과 같다.
+`tf.scan`을 이용해서 $\mathbf{W}$와 $\mathbf{u}$를 `tf.matmul`하는 코드는 다음과 같다.
 
 ``` python
 # W: [bs, 32, 10, 8, 16], will be repeated 36 times by tf.scan
@@ -181,7 +179,7 @@ uh = tf.scan(lambda ac, x: tf.matmul(W, x, transpose_a=True), u,
              initializer=tf.zeros([cfg.batch_size, 32, 10, 16, 1]))
 ```
 
-계산된 $\hat{\vec{u}}$를 사용하는 뒤따르는 단계에 적합하도록 텐서의 모양을 변경해서 반환한다.
+계산된 $\hat{\mathbf{u}}$를 사용하는 뒤따르는 단계에 적합하도록 텐서의 모양을 변경해서 반환한다.
 
 ``` python
 # Transpose and reshape uh back for sum_I {c (*) uh}
@@ -199,8 +197,8 @@ return uh
 ## batch_size에 대해서 tf.scan을 사용한 구현
 
 좀 더 간단하다.
-$\vec{u}$는 naturomics와 동일하다.
-$\mat{W}$는 batch_size 만큼 `tf.tile`하는 대신에 `tf.scan`으로 반복하게끔 한다.
+$\mathbf{u}$는 naturomics와 동일하다.
+$\mathbf{W}$는 batch_size 만큼 `tf.tile`하는 대신에 `tf.scan`으로 반복하게끔 한다.
 
 ``` python
 # Shape u for tf.matmul(W, u) in tf.scan
